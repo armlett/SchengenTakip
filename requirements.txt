@@ -4,5 +4,4 @@ urllib3
 certifi
 charset-normalizer
 idna
-geopy
-geocoder
+plyer
