@@ -5,3 +5,4 @@ certifi
 charset-normalizer
 idna
 plyer
+pyjnius

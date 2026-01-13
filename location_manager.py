@@ -1,64 +1,74 @@
-# location_manager.py
+# -*- coding: utf-8 -*-
 import os
-import requests
+import time
 from plyer import gps
 
-def get_ip_location():
-    """Windows/PC için IP tabanlı konum tespiti"""
+def get_android_native_country(lat, lon):
+    """
+    Android'in kendi sistem kütüphanesini kullanarak 
+    koordinatı ülke ismine çevirir (İnternetsiz deneme yapar).
+    """
     try:
-        response = requests.get('http://ip-api.com/json/', timeout=5)
-        data = response.json()
-        if data['status'] == 'success':
-            return data['country']
-    except:
-        return None
+        from jnius import autoclass
+        
+        # Android'in temel sınıflarına erişelim
+        Context = autoclass('android.content.Context')
+        PythonActivity = autoclass('org.kivy.android.PythonActivity')
+        Geocoder = autoclass('android.location.Geocoder')
+        Locale = autoclass('java.util.Locale')
+
+        activity = PythonActivity.mActivity
+        # Geocoder nesnesi oluştur (Türkçe sonuç vermesi için Locale.GERMANY veya Locale.ENGLISH de seçilebilir)
+        geocoder = Geocoder(activity, Locale.getDefault())
+        
+        # Koordinattan adres bilgilerini al (Sadece 1 sonuç iste)
+        addresses = geocoder.getFromLocation(lat, lon, 1)
+        
+        if addresses and addresses.size() > 0:
+            address = addresses.get(0)
+            country_name = address.getCountryName() # Doğrudan ülke ismini verir
+            return country_name
+    except Exception as e:
+        print(f"Android Native Geocoder Hatası: {e}")
     return None
 
 def get_android_gps_location():
-    """Android için GPS sensör tabanlı konum tespiti"""
+    """GPS Sensöründen ham koordinatları alır"""
     try:
-        # Android'de GPS'i yapılandır ve tek seferlik konum almayı dene
-        # Not: Android izinleri APK derlenirken build.yml'de belirtilmelidir.
-        lat, lon = None, None
+        res_data = {"lat": None, "lon": None}
         
         def on_location(**kwargs):
-            nonlocal lat, lon
-            lat = kwargs.get('lat')
-            lon = kwargs.get('lon')
+            res_data["lat"] = kwargs.get('lat')
+            res_data["lon"] = kwargs.get('lon')
 
         gps.configure(on_location=on_location)
-        gps.start(1, 1) # 1 saniye aralıkla güncelleme iste
+        gps.start(1000, 1)
         
-        # Konumun gelmesi için kısa bir süre bekle (GPS soğuk başlama yapabilir)
-        import time
-        for _ in range(10):
-            if lat is not None:
+        # GPS/Fake GPS uydularını bekle (30 saniye)
+        for i in range(30):
+            if res_data["lat"] is not None:
                 break
             time.sleep(1)
         
         gps.stop()
 
-        if lat and lon:
-            # Koordinatı ülke ismine çevir (Reverse Geocoding)
-            res = requests.get(f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}", 
-                               headers={'User-Agent': 'SchengenTrackerApp'})
-            return res.json().get('address', {}).get('country')
+        if res_data["lat"] and res_data["lon"]:
+            # İNTERNETSİZ: Android'in kendi Geocoder'ını kullan
+            return get_android_native_country(res_data["lat"], res_data["lon"])
+            
     except Exception as e:
-        print(f"GPS Hatası: {e}")
+        print(f"GPS Kritik Hata: {e}")
     return None
 
 def get_current_location():
-    """OS kontrolü yaparak doğru metodu seçer"""
-    # Android ortamı tespiti (Flet/Pydroid vb.)
-    is_android = "ANDROID_ARGUMENT" in os.environ or "PYTHON_SERVICE_ARGUMENT" in os.environ
-
-    if is_android:
-        # Önce GPS dene
-        loc = get_android_gps_location()
-        # GPS başarısız olursa (Örn: Bina içi) IP'ye dön
-        if not loc:
-            loc = get_ip_location()
-        return loc
-    else:
-        # Windows/PC ise doğrudan IP kullan
-        return get_ip_location()
+    # Android ortamı tespiti
+    if os.path.exists('/data/user/0'):
+        return get_android_gps_location()
+    
+    # Windows'ta ise mecbur IP (Internet şart)
+    try:
+        import requests
+        response = requests.get('http://ip-api.com/json/', timeout=5)
+        return response.json().get('country')
+    except:
+        return "Bilinmiyor"
