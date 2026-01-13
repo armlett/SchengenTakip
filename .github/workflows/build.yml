@@ -36,10 +36,10 @@ jobs:
       with:
         channel: stable
 
-    # 3. APK İnşa Etme Komutu
+    # 3. APK İnşa Etme Komutu (GPS İzinleri Eklendi)
     - name: Build APK
       run: |
-        flet build apk --verbose
+        flet build apk --verbose --permissions ACCESS_FINE_LOCATION,ACCESS_COARSE_LOCATION,INTERNET
 
     # 4. Sonucu Yükle
     - name: Upload APK
