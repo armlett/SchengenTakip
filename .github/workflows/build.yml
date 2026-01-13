@@ -39,7 +39,7 @@ jobs:
     # 3. APK İnşa Etme Komutu (GPS İzinleri Eklendi)
     - name: Build APK
       run: |
-        flet build apk --verbose --permissions ACCESS_FINE_LOCATION,ACCESS_COARSE_LOCATION,INTERNET
+        flet build apk --verbose --permissions location
 
     # 4. Sonucu Yükle
     - name: Upload APK
